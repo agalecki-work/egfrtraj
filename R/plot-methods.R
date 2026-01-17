@@ -1,147 +1,114 @@
-# print-methods.R
-# Custom print and summary methods for egfr_trajectories objects
+# plot-methods.R
+# Visualization methods for egfr_trajectories objects
 
-#' Print method for egfr_trajectories objects
+#' Plot method for egfr_trajectories objects
 #'
-#' Displays a concise, human-readable overview of the classification results.
+#' Creates a faceted line plot of all individual eGFR trajectories,
+#' colored by assigned pattern.
 #'
 #' @param x An object of class `"egfr_trajectories"`
-#' @param ... Additional arguments (currently ignored)
+#' @param data Optional original long-format data frame (if not stored in object)
+#' @param ncol Number of columns in facet grid (default: 5)
+#' @param scales Should facet scales be "free_y", "fixed", etc.? (default: "free_y")
+#' @param show_breakpoints Logical. Draw vertical lines at detected breakpoints? (default: TRUE)
+#' @param alpha Transparency of lines (default: 0.7)
+#' @param point_size Size of individual points (default: 1.2)
+#' @param ... Additional arguments passed to ggplot2::ggplot()
 #'
-#' @return Invisibly returns `x`
+#' @return A ggplot object (invisibly returned)
 #' @export
-#' @method print egfr_trajectories
-print.egfr_trajectories <- function(x, ...) {
-  cat("eGFR Trajectory Classification Results\n")
-  cat("────────────────────────────────────\n")
-  
-  # Basic info
-  n_total <- nrow(x$results)
-  n_classified <- sum(!x$results$pattern %in% c("insufficient_data", NA))
-  cat("Total individuals processed: ", n_total, "\n")
-  cat("Successfully classified:     ", n_classified, " (", 
-      round(n_classified / n_total * 100, 1), "%)\n\n")
-  
-  # Pattern distribution
-  cat("Pattern Distribution:\n")
-  pat_tab <- table(x$results$pattern, useNA = "ifany")
-  pat_prop <- round(prop.table(pat_tab) * 100, 1)
-  
-  print_df <- data.frame(
-    Pattern = names(pat_tab),
-    Count   = as.integer(pat_tab),
-    Percent = paste0(pat_prop, "%")
-  )
-  print(print_df, row.names = FALSE, right = FALSE)
-  cat("\n")
-  
-  # Breakpoint summary (only for rapid_with_breakpoint)
-  rapid <- x$results %>% dplyr::filter(pattern == "rapid_with_breakpoint")
-  if (nrow(rapid) > 0) {
-    cat("Breakpoint Timing Summary (rapid_with_breakpoint):\n")
-    cat("  - Number of cases: ", nrow(rapid), "\n")
-    cat("  - Mean breakpoint time: ", 
-        round(mean(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n")
-    cat("  - Median breakpoint time: ", 
-        round(median(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n")
-    cat("  - Range: ", 
-        round(min(rapid$breakpoint_time, na.rm = TRUE), 1), "–",
-        round(max(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n\n")
+#' @method plot egfr_trajectories
+plot.egfr_trajectories <- function(
+    x,
+    data = NULL,
+    ncol = 5,
+    scales = "free_y",
+    show_breakpoints = TRUE,
+    alpha = 0.7,
+    point_size = 1.2,
+    ...
+) {
+  # Use stored results; fall back to provided data if needed
+  if (is.null(data)) {
+    if (!exists("data", envir = parent.frame())) {
+      stop("No original data found. Provide 'data' argument or ensure data is available.")
+    }
+    data <- get("data", envir = parent.frame())  # fallback
   }
   
-  cat("Use `summary()` for more details or `plot()` for visualization.\n")
-  invisible(x)
-}
-
-
-#' Summary method for egfr_trajectories objects
-#'
-#' Provides a more detailed summary than the default print method.
-#'
-#' @param object An object of class `"egfr_trajectories"`
-#' @param ... Additional arguments (currently ignored)
-#'
-#' @return Invisibly returns a list with summary statistics
-#' @export
-#' @method summary egfr_trajectories
-summary.egfr_trajectories <- function(object, ...) {
-  res <- object$results
-  
-  # Pattern counts
-  pat_counts <- table(res$pattern, useNA = "ifany")
-  
-  # Breakpoint statistics
-  rapid <- res %>% dplyr::filter(pattern == "rapid_with_breakpoint")
-  bp_stats <- if (nrow(rapid) > 0) {
-    list(
-      n = nrow(rapid),
-      mean_bp = mean(rapid$breakpoint_time, na.rm = TRUE),
-      median_bp = median(rapid$breakpoint_time, na.rm = TRUE),
-      min_bp = min(rapid$breakpoint_time, na.rm = TRUE),
-      max_bp = max(rapid$breakpoint_time, na.rm = TRUE),
-      n_knots_mean = mean(rapid$n_knots, na.rm = TRUE)
+  # Join classification with original data
+  plot_data <- data %>%
+    dplyr::left_join(x$results, by = "id") %>%
+    dplyr::mutate(
+      pattern = forcats::fct_relevel(
+        pattern,
+        "stable", "slow_linear", "rapid_with_breakpoint", "insufficient_data"
+      )
     )
-  } else {
-    list(n = 0, mean_bp = NA, median_bp = NA, min_bp = NA, max_bp = NA, n_knots_mean = NA)
+  
+  # Base plot
+  p <- ggplot2::ggplot(
+    plot_data,
+    ggplot2::aes(x = time, y = egfr, group = id, color = pattern)
+  ) +
+    ggplot2::geom_line(alpha = alpha, linewidth = 0.6) +
+    ggplot2::geom_point(size = point_size, alpha = 0.8) +
+    ggplot2::scale_color_manual(
+      values = c(
+        "stable"               = "#2ca02c",        # green
+        "slow_linear"          = "#1f77b4",        # blue
+        "rapid_with_breakpoint" = "#d62728",       # red
+        "insufficient_data"    = "#7f7f7f",        # gray
+        "NA"                   = "#9467bd"         # purple for any NA
+      ),
+      na.value = "#9467bd",
+      drop = FALSE
+    ) +
+    ggplot2::labs(
+      title    = "Individual eGFR Trajectories by Classified Pattern",
+      x        = "Time (years)",
+      y        = "eGFR (mL/min/1.73 m²)",
+      color    = "Pattern"
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      legend.title    = ggplot2::element_text(face = "bold"),
+      strip.text      = ggplot2::element_text(face = "bold", size = 10),
+      panel.grid.minor = ggplot2::element_blank()
+    ) +
+    ggplot2::facet_wrap(~id, ncol = ncol, scales = scales)
+  
+  # Optional: add vertical lines for breakpoints
+  if (show_breakpoints) {
+    bp_data <- x$results %>%
+      dplyr::filter(pattern == "rapid_with_breakpoint" & !is.na(breakpoint_time))
+    
+    if (nrow(bp_data) > 0) {
+      p <- p + ggplot2::geom_vline(
+        data = bp_data,
+        ggplot2::aes(xintercept = breakpoint_time),
+        linetype = "dashed", color = "#d62728", linewidth = 0.8,
+        alpha = 0.6
+      )
+    }
   }
   
-  # Used parameters
-  params <- object$params
-  
-  structure(
-    list(
-      n_total = nrow(res),
-      pattern_counts = pat_counts,
-      breakpoint_stats = bp_stats,
-      parameters = params,
-      call = object$call
-    ),
-    class = "summary.egfr_trajectories"
-  )
+  print(p)
+  invisible(p)
 }
 
 
-#' Print method for summary.egfr_trajectories
+#' Autoplot method (ggplot2 compatible)
 #'
-#' @param x A summary object from `summary.egfr_trajectories()`
-#' @param digits Number of decimal places (default: 2)
-#' @param ... Additional arguments (ignored)
+#' Allows ggplot2-style modification after plotting.
 #'
+#' @param object An `egfr_trajectories` object
+#' @param ... Arguments passed to `plot.egfr_trajectories()`
+#'
+#' @return A ggplot object
 #' @export
-#' @method print summary.egfr_trajectories
-print.summary.egfr_trajectories <- function(x, digits = 2, ...) {
-  cat("Summary of eGFR Trajectory Classification\n")
-  cat("────────────────────────────────────────\n\n")
-  
-  cat("Call:\n")
-  print(x$call)
-  cat("\n")
-  
-  cat("Parameters used:\n")
-  cat("  Min observations per ID: ", x$parameters$min_obs, "\n")
-  cat("  Slope significance level: ", x$parameters$slope_p, "\n")
-  cat("  Quadratic p-value threshold: ", x$parameters$quad_p, "\n")
-  cat("  Min ΔR² for non-linearity: ", x$parameters$delta_r2, "\n")
-  cat("  Max knots allowed: ", x$parameters$max_knots, "\n\n")
-  
-  cat("Classification Results:\n")
-  cat("  Total trajectories: ", x$n_total, "\n\n")
-  
-  cat("Pattern Counts:\n")
-  print(as.data.frame(x$pattern_counts), right = FALSE)
-  cat("\n")
-  
-  cat("Breakpoint Statistics (rapid_with_breakpoint):\n")
-  if (x$breakpoint_stats$n > 0) {
-    cat("  Number of rapid cases: ", x$breakpoint_stats$n, "\n")
-    cat("  Mean breakpoint time:  ", round(x$breakpoint_stats$mean_bp, digits), " years\n")
-    cat("  Median breakpoint time:", round(x$breakpoint_stats$median_bp, digits), " years\n")
-    cat("  Range:                 ", round(x$breakpoint_stats$min_bp, digits), "–",
-        round(x$breakpoint_stats$max_bp, digits), " years\n")
-    cat("  Average knots per case:", round(x$breakpoint_stats$n_knots_mean, digits), "\n")
-  } else {
-    cat("  No rapid_with_breakpoint trajectories detected.\n")
-  }
-  
-  invisible(x)
+#' @method autoplot egfr_trajectories
+autoplot.egfr_trajectories <- function(object, ...) {
+  plot.egfr_trajectories(object, ...)
 }
