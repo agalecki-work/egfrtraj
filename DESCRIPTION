@@ -1,10 +1,19 @@
-Package: egfrPatt
+Package: egfrtraj
 Title: Patterns of Estimated Glomerular Filtration Rate (eGFR) Trajectories
 Version: 0.0.0.9000
 Authors@R: 
     person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
 Description: What the package does (one paragraph).
-Suggests: ggplot2, tidyr, dplyr, purrr, segmented
+Imports:
+    dplyr,
+    forcats,
+    ggplot2
+Suggests: 
+    ggplot2, 
+    tidyr,
+    dplyr,
+    purrr,
+    segmented
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
