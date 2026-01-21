@@ -14,6 +14,7 @@ devtools::document()
 devtools::load_all()
 
 # ── 6. Load required dependencies
+library(tidyr)
 library(dplyr)
 library(segmented)
 
@@ -21,15 +22,15 @@ library(segmented)
 set.seed(20250116)  # for reproducibility
 
 example_egfr_trajectories <- generate_synthetic_egfr(
-  n_per_pattern = 1,       # one trajectory per pattern → 108 rows total
-  years         = 0:26,
+  n_per_pattern = 5,       # 5 subjects per pattern
+  years         = 0:26,    # 27 rows per person
   baseline_egfr = 125,
   noise_sd      = 2
 )
 
-# Quick verification (should show 108 rows, 27 per pattern)
-nrow(example_egfr_trajectories)
-table(example_egfr_trajectories$true_pattern)
+# Quick verification (should show  4 patterns * 5 subjects per pattern -> 20 subjects, 27 per subject)
+nrow(example_egfr_trajectories) #  27*20 = 540 rows in total
+table(example_egfr_trajectories$true_pattern) # 5 *27 = 135 rows per pattern 
 
 # Save the freshly generated data back to data/ folder (overwrites old version)
 usethis::use_data(example_egfr_trajectories, overwrite = TRUE)
@@ -40,21 +41,32 @@ devtools::document()
 # ── 9. Reload package one more time (now with the fresh data)
 devtools::load_all()
 
-# ── 10. Optional: Quick test on one subject (ID "3" for example)
+# ── 10. Optional: Quick test on one subject (ID "?" for example)
 df_single <- example_egfr_trajectories %>%
-  filter(id == "3")
+  filter(id == "6") # 1, 6, 11, 16
 
-fit <- classify_single_trajectory(
-  df_single,
-  id_col        = "id",
-  time_col      = "time",
-  egfr_col      = "egfr",
-  estimate_se   = TRUE
+head(df_single)
+tail(df_single)
+
+res <- classify_single_trajectory(
+    df_single,
+    id_col             = "id",
+    time_col           = "time",
+    egfr_col           = "egfr",
+    bic_tie_threshold  = 4,
+    ci_level           = 0.95
 )
 
-# Quick results check
-fit$pattern
-fit$breakpoint_time
-fit$data %>% head()
+
+names(res)
+res$id
+res$info
+names(res$fitted)
+model_summ <- res$model_summary
+model_summ
+as_tibble(model_summ$info[[1]]) # unnested $info
+as_tibble(model_summ$linear[[1]])# unnested $linear
+as_tibble(model_summ$quadratic[[1]])# unnested $quadratic
+as_tibble(model_summ$segmented[[1]])# unnested $segmented
 
 

@@ -34,7 +34,7 @@ generate_one_trajectory <- function(
     after_idx  <- years >= bp
     
     before <- baseline_egfr - 0.8 * years[before_idx]
-    after  <- before[length(before)] - 8.5 * (years[after_idx] - bp)
+    after  <- before[length(before)] - 6.5 * (years[after_idx] - bp)
     
     egfr <- numeric(length(years))
     egfr[before_idx] <- before

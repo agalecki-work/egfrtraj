@@ -14,7 +14,9 @@ classify_single_trajectory(
 )
 }
 \arguments{
-\item{df}{Data frame with columns: id, time, egfr (one subject only)}
+\item{df}{Data frame with columns: id (or custom name), time, egfr (one subject only)}
+
+\item{id_col}{Name of the ID column (default: "id")}
 
 \item{time_col}{Name of time column (default: "time")}
 
@@ -25,33 +27,15 @@ classify_single_trajectory(
 \item{ci_level}{Confidence level for prediction intervals (default: 0.95)}
 }
 \value{
-Named list with class "egfrtraj_single":
+A named list with:
 \itemize{
-\item pattern: "insufficient_data", "linear", "quadratic", "with_breakpoint"
-\item selected_model_name: "linear", "quadratic", "segmented"
-\item selected_model: winning model object
-\item aic_values, bic_values: named vectors for all models
-\item breakpoint_time: estimated breakpoint (NA otherwise)
-\item nobs: number of valid observations used
-\item nmiss: number of missing observations
-\item data: input data + columns for predictions/CIs from all models
-(lin_fitted, lin_conf.low, lin_conf.high, etc.)
-\item model_summary: one-row tibble with:
-\itemize{
-\item id, nobs, nmiss
-\item breakpoint_time, breakpoint_se
-\item lin_intercept, lin_slope, lin_intercept_se, lin_slope_se, lin_AIC, lin_BIC
-\item quad_intercept, quad_linear, quad_quadratic,
-quad_intercept_se, quad_linear_se, quad_quadratic_se, quad_AIC, quad_BIC
-\item seg_pre_intercept, seg_pre_slope, seg_post_slope,
-seg_pre_intercept_se, seg_pre_slope_se, seg_post_slope_se, seg_AIC, seg_BIC
-}
-\item all_models: list of fitted objects (or NULL)
+\item id: scalar character (subject identifier)
+\item fitted: tibble with id, time, egfr and model fitted values / intervals
+\item model_summary: one-row tibble with nested lists (info, linear, quadratic, segmented)
 }
 }
 \description{
-Expects data for \strong{exactly one subject} (id, time, egfr columns).
-Fits linear, quadratic, and segmented (max 1 knot) models, selects best
-using BIC (with tie-breaker favoring segmented), and returns predictions
-for all models + detailed coefficient summary (including AIC and BIC).
+Fits linear, quadratic, and segmented (max 1 knot) models to one subject's eGFR trajectory,
+selects the best model using BIC (with tie-breaker favoring segmented),
+and returns a list with id, fitted values, and model summary.
 }
