@@ -1,154 +1,117 @@
 # plot-methods.R
 # Visualization methods for egfr_trajectories objects
 
-#' @importFrom ggplot2 autoplot
+#' @importFrom ggplot2  # autoplot
 NULL
 
 
-#' Plot method for egfrtraj_single objects
+#' Plot an eGFR trajectory
 #'
-#' Plots the observed eGFR trajectory, fitted values from the selected model,
-#' 95% prediction interval ribbon, and breakpoint line (if applicable).
-#'
-#' @param x An object of class "egfrtraj_single" (from classify_single_trajectory_ic())
-#' @param data Ignored (uses x$data internally)
-#' @param ncol Number of columns in facet (default: 1, single subject)
-#' @param scales Y-scale behavior ("fixed" or "free_y", default: "fixed")
-#' @param show_breakpoints Logical. Draw vertical line at breakpoint? (default: TRUE)
-#' @param point_size Size of observed points (default: 2)
-#' @param line_width Width of fitted line (default: 1.2)
-#' @param ribbon_alpha Transparency of prediction interval ribbon (default: 0.2)
-#' @param ... Additional arguments passed to ggplot2::ggplot()
-#'
-#' @return A ggplot object (invisibly returned)
-#' @export
-#' @method plot egfrtraj_single
-plot.egfrtraj_single <- function(
-    x,
-    data = NULL,  # ignored - uses x$data
-    ncol = 1,
-    scales = "fixed",
-    show_breakpoints = TRUE,
-    point_size = 2,
-    line_width = 1.2,
-    ribbon_alpha = 0.2,
-    ...
-) {
-  # Extract data with predictions
-  plot_data <- x$data
-
-  # Base plot
-  p <- ggplot2::ggplot(
-    plot_data,
-    ggplot2::aes(x = time, y = egfr)
-  ) +
-    ggplot2::geom_point(size = point_size, color = "darkblue", alpha = 0.7) +
-    ggplot2::geom_line(
-      ggplot2::aes(y = fitted),
-      color = "blue",
-      linewidth = line_width
-    ) +
-    ggplot2::geom_ribbon(
-      ggplot2::aes(ymin = lower_ci, ymax = upper_ci),
-      alpha = ribbon_alpha,
-      fill = "blue"
-    ) +
-    ggplot2::labs(
-      title    = paste("eGFR Trajectory - Selected Model:", x$selected_pattern),
-      subtitle = paste("BIC winner:", x$selected_model_name),
-      x        = "Time (years)",
-      y        = "eGFR (mL/min/1.73 m²)"
-    ) +
-    ggplot2::theme_minimal(base_size = 13) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5)
-    )
-
-  # Add breakpoint line if present and selected
-  if (show_breakpoints && !is.na(x$breakpoint_time) && x$selected_model_name == "segmented") {
-    p <- p + ggplot2::geom_vline(
-      xintercept = x$breakpoint_time,
-      linetype = "dashed",
-      color = "red",
-      linewidth = 1
-    )
-  }
-
-  # Apply scales & facets (single subject → ncol=1 usually)
-  p <- p + ggplot2::facet_wrap(~ id, scales = scales, ncol = ncol)
-
-  print(p)
-  invisible(p)
-}
-
-#' Autoplot method for egfrtraj_single objects
-#'
-#' Returns a ggplot object of the eGFR trajectory with selected model fit,
-#' prediction intervals, and breakpoint line (if applicable).
-#'
-#' @param object An egfrtraj_single object
-#' @param ... Additional arguments passed to ggplot2::ggplot()
+#' @param x An `egfr_traj` object (from `classify_single_trajectory()`)
+#' @param plot_model Character vector specifying **additional** fitted models to show.
+#'   Options: `"lin"`, `"quad"`, `"seg"`. Default: `c("lin", "quad", "seg")` (all).
+#'   The **selected model** is **always plotted**, even if not in `plot_model`.
+#'   Use `character(0)` or `NULL` to show **only the selected model**.
+#' @param show_ci Logical. Show confidence bands for the selected model? Default `TRUE`.
+#' @param ... Passed to ggplot2
 #'
 #' @return A ggplot object
 #' @export
-#' @method autoplot egfrtraj_single
-autoplot.egfrtraj_single <- function(object, ...) {
-  plot_data <- object$data
+plot.egfr_traj <- function(x, 
+                           plot_model = c("lin", "quad", "seg"),
+                           show_ci = TRUE,
+                           ...) {
+  info <- x$models$info[[1]]
+  traj <- x$trajectory
 
-  p <- ggplot2::ggplot(
-    plot_data,
-    ggplot2::aes(x = time, y = egfr)
-  ) +
-    ggplot2::geom_point(size = 2, color = "darkblue", alpha = 0.7) +
-    ggplot2::geom_line(
-      ggplot2::aes(y = fitted),
-      color = "blue",
-      linewidth = 1.2
-    ) +
-    ggplot2::geom_ribbon(
-      ggplot2::aes(ymin = lower_ci, ymax = upper_ci),
-      alpha = 0.2,
-      fill = "blue"
-    ) +
-    ggplot2::labs(
-      title    = paste("eGFR Trajectory - Selected:", object$selected_pattern),
-      subtitle = paste("Model:", object$selected_model_name),
-      x        = "Time (years)",
-      y        = "eGFR (mL/min/1.73 m²)"
-    ) +
-    ggplot2::theme_minimal(base_size = 13) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5)
-    )
+  # ── Handle insufficient data ───────────────────────────────────────────────
+  if (info$pattern == "insufficient_data") {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, 
+               label = "Insufficient data\n(no valid eGFR points)", 
+               size = 6, color = "grey50") +
+      theme_minimal() +
+      labs(title = sprintf("Subject %s – Insufficient Data", x$id)) +
+      coord_cartesian(xlim = c(0,1), ylim = c(0,1)) +
+      theme(axis.text = element_blank(), axis.ticks = element_blank(), 
+            axis.title = element_blank())
+    return(p)
+  }
 
-  # Add breakpoint line if present
-  if (!is.na(object$breakpoint_time) && object$selected_model_name == "segmented") {
-    p <- p + ggplot2::geom_vline(
-      xintercept = object$breakpoint_time,
-      linetype = "dashed",
-      color = "red",
-      linewidth = 1
-    )
+  # ── Selected model prefix ──────────────────────────────────────────────────
+  selected_prefix <- switch(info$pattern,
+                            "linear"    = "lin",
+                            "quadratic" = "quad",
+                            "segmented" = "seg",
+                            "lin")
+
+  # ── Models to plot (always include selected) ───────────────────────────────
+  if (length(plot_model) == 0 || is.null(plot_model)) {
+    all_models <- selected_prefix
+  } else {
+    plot_model <- match.arg(plot_model, choices = c("lin", "quad", "seg"), several.ok = TRUE)
+    all_models <- unique(c(plot_model, selected_prefix))
+  }
+
+  # ── Base plot ──────────────────────────────────────────────────────────────
+  p <- ggplot(traj, aes(x = time, y = egfr)) +
+    geom_point(color = "steelblue", size = 2, alpha = 0.7) +
+    labs(
+      title    = sprintf("Subject %s – %s trajectory", x$id, info$pattern),
+      subtitle = sprintf("Observations: %d   eGFR change: %.1f", 
+                         info$nobs, traj$egfr[1] - traj$egfr[nrow(traj)]),
+      x = "Time", y = "eGFR"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold"))
+
+  # ── Model aesthetics ───────────────────────────────────────────────────────
+  model_colors <- c("lin" = "grey60", "quad" = "purple", "seg" = "tomato")
+  model_labels <- c("lin" = "Linear", "quad" = "Quadratic", "seg" = "Segmented (selected)")
+
+  # ── Add lines ──────────────────────────────────────────────────────────────
+  for (m in all_models) {
+    fitted_col <- paste0(m, "_fitted")
+    if (fitted_col %in% names(traj)) {
+      is_selected <- m == selected_prefix
+      p <- p + 
+        geom_line(aes(y = .data[[fitted_col]]), 
+                  color = model_colors[m],
+                  linewidth = if (is_selected) 1.4 else 0.9,
+                  linetype = if (is_selected) "solid" else "dashed")
+    }
+  }
+
+  # ── Unified legend ─────────────────────────────────────────────────────────
+  used_colors <- model_colors[match(all_models, names(model_colors))]
+  used_labels <- model_labels[match(all_models, names(model_labels))]
+
+  p <- p + 
+    scale_color_manual(values = used_colors,
+                       labels = used_labels,
+                       name = "Model")
+
+  # ── Confidence bands (selected model only) ─────────────────────────────────
+  if (show_ci) {
+    low_col  <- paste0(selected_prefix, "_conf.low")
+    high_col <- paste0(selected_prefix, "_conf.high")
+    if (all(c(low_col, high_col) %in% names(traj))) {
+      p <- p + 
+        geom_ribbon(aes(ymin = .data[[low_col]], ymax = .data[[high_col]]),
+                    alpha = 0.15, fill = model_colors[selected_prefix])
+    }
+  }
+
+  # ── Breakpoint line ────────────────────────────────────────────────────────
+  if (info$pattern == "segmented" && !is.na(info$breakpoint_time)) {
+    p <- p + 
+      geom_vline(xintercept = info$breakpoint_time, 
+                 linetype = "dashed", color = "darkgreen", linewidth = 0.8) +
+      annotate("text", x = info$breakpoint_time + 1, 
+               y = max(traj$egfr, na.rm = TRUE) * 0.9,
+               label = sprintf("Breakpoint: %.1f", info$breakpoint_time),
+               color = "darkgreen", hjust = 0)
   }
 
   p
 }
-
-
-#' Plot method for egfrtraj_single objects
-#'
-#' Convenience wrapper that calls autoplot() and prints the result.
-#'
-#' @param x An egfrtraj_single object
-#' @param ... Passed to autoplot.egfrtraj_single()
-#'
-#' @export
-#' @method plot egfrtraj_single
-plot.egfrtraj_single <- function(x, ...) {
-  p <- autoplot.egfrtraj_single(x, ...)
-  print(p)
-  invisible(p)
-}
-

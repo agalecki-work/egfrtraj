@@ -200,16 +200,14 @@ classify_single_trajectory <- function(
 #' @param data Data frame with multiple (or single) subjects
 #' @param best_model_only If `TRUE` (default), keep only selected model results
 #' @param estimates_only If `TRUE`, drop standard error columns
-#' @param add_cols Character vector of additional columns to return separately
 #'
-#' @return Named list of `egfr_traj` objects (one per subject)
+#' @return Object of class `egfr_traj_collection ` with the named list of `egfr_traj` objects (one per subject)
 #' @export
 classify_multiple_trajectories <- function(
     data,
     id_col             = "id",
     time_col           = "time",
     egfr_col           = "egfr",
-    add_cols           = NULL,
     bic_tie_threshold  = 4,
     ci_level           = 0.95,
     best_model_only    = TRUE,
@@ -299,16 +297,6 @@ classify_multiple_trajectories <- function(
       trajectory = traj,
       models     = models_s
     )
-
-    # ── Optional add_cols ──────────────────────────────────────────────────
-    if (!is.null(add_cols) && length(add_cols) > 0) {
-      add_df <- data |>
-        dplyr::filter(.data[[id_col]] == subj) |>
-        dplyr::select(all_of(c(id_col, add_cols))) |>
-        dplyr::distinct()
-      if (id_col != "id") add_df <- dplyr::rename(add_df, id = all_of(id_col))
-      out$add_cols <- add_df
-    }
 
     class(out) <- "egfr_traj_collection"
     result[[as.character(subj)]] <- out
