@@ -1,75 +1,12 @@
-#' Create minimal dataset for one subject
-#' Expects data for **exactly one subject** (id, time, egfr, egfr_add columns).
-#' @param df Data frame with columns: id (or custom name), time, egfr (one subject only)
-#' @param id_col Name of the ID column (default: "id")
-#' @param time_col Name of time column (default: "time")
-#' @param egfr_col Name of eGFR column (default: "egfr")
-#' @param add_cols Names of additional columns (default: character(0))
-minimal_1traj <- function(
-    df,
-    id_col   = "id",
-    time_col = "time",
-    egfr_col = "egfr",
-    add_cols = character(0)
-) {
-  # ── Input validation ───────────────────────────────────────────────────────
-  required_cols <- c(id_col, time_col, egfr_col)
-  if (length(add_cols) > 0) {
-    required_cols <- c(required_cols, add_cols)
-  }
-  
-  missing_cols <- setdiff(required_cols, names(df))
-  if (length(missing_cols) > 0) {
-    stop(
-      "Input df must contain columns: ", paste(required_cols, collapse = ", "),
-      "\nMissing: ", paste(missing_cols, collapse = ", ")
-    )
-  }
-
-  unique_ids <- unique(df[[id_col]])
-  if (length(unique_ids) != 1L) {
-    stop(
-      "Input df must contain data for exactly one subject. ",
-      "Found ", length(unique_ids), " unique IDs: ",
-      paste(unique_ids, collapse = ", ")
-    )
-  }
-
-  # ── Build minimal dataset ──────────────────────────────────────────────────
-  select_cols <- c(
-    id   = id_col,           # rename to standard "id"
-    time = time_col,         # rename to standard "time"
-    egfr = egfr_col          # rename to standard "egfr"
-  )
-  
-  if (length(add_cols) > 0) {
-    select_cols <- c(select_cols, add_cols)
-  }
-
-  minimal_df <- df %>%
-    dplyr::select(all_of(select_cols)) %>%
-    dplyr::filter(!is.na(time), !is.na(egfr))
-  
-  minimal_df
-}
-
+# classify_single_trajectory
 #' Classify a single eGFR trajectory
 #'
-#' Fits linear, quadratic, and segmented (max 1 knot) models to one subject's eGFR trajectory,
-#' selects the best model using BIC (with tie-breaker favoring segmented),
-#' and returns a list with id, fitted values, and model summary.
+#' @param df Data frame with data for exactly one subject
+#' @param id_col,time_col,egfr_col Column names
+#' @param bic_tie_threshold Default 4
+#' @param ci_level Default 0.95
 #'
-#' @param df Data frame with columns: id (or custom name), time, egfr (one subject only)
-#' @param id_col Name of the ID column (default: "id")
-#' @param time_col Name of time column (default: "time")
-#' @param egfr_col Name of eGFR column (default: "egfr")
-#' @param bic_tie_threshold BIC difference threshold for preferring segmented (default: 4)
-#' @param ci_level Confidence level for prediction intervals (default: 0.95)
-#'
-#' @return A named list with:
-#'   - id: scalar character (subject identifier)
-#'   - fitted: tibble with id, time, egfr and model fitted values / intervals
-#'   - model_summary: one-row tibble with nested lists (info, linear, quadratic, segmented)
+#' @return List with id, trajectory, models
 #' @export
 classify_single_trajectory <- function(
     df,
@@ -79,65 +16,88 @@ classify_single_trajectory <- function(
     bic_tie_threshold  = 4,
     ci_level           = 0.95
 ) {
-  minimal_df <- minimal_1traj(
-    df       = df,
-    id_col   = id_col,
-    time_col = time_col,
-    egfr_col = egfr_col
-  )
+  # ── Early filtering & renaming ─────────────────────────────────────────────
+  df_clean <- df %>%
+    dplyr::select(
+      id   = all_of(id_col),
+      time = all_of(time_col),
+      egfr = all_of(egfr_col)
+    ) %>%
+    dplyr::filter(!is.na(time), !is.na(egfr))
 
-  n_valid    <- nrow(minimal_df)
+  n_valid    <- nrow(df_clean)
   n_miss     <- nrow(df) - n_valid
-  subject_id <- unique(minimal_df$id)[1]
 
-  # ── Prepare fitted tibble (early version — updated later if enough data)
-  fitted_df <- minimal_df |>
-    dplyr::select(id, time, egfr)
+  # Safe subject_id even if df_clean is empty
+  subject_id <- if (nrow(df) > 0) unique(df[[id_col]])[1] else NA_character_
 
-  # ── Prepare nested info list (will be placed inside model_summary)
-  nested_info <- list(list(
-    pattern         = "insufficient_data",
-    nobs            = n_valid,
-    nmiss           = n_miss,
-    breakpoint_time = NA_real_,
-    bp_se           = NA_real_
-  ))
+  # ── EARLY EXIT ─ must be here, before any other logic ──────────────────────
+ 
 
-  # ── Prepare return object ──────────────────────────────────────────────────
-  out <- list(
-    id            = subject_id,
-    fitted        = fitted_df,
-    model_summary = tibble::tibble(
-      info      = nested_info,
-      linear    = list(),
-      quadratic = list(),
-      segmented = list()
+ if (n_valid < 5L) {
+  return(list(
+    id         = subject_id,
+    trajectory = tibble::tibble(
+      id   = subject_id,
+      time = NA_integer_,
+      egfr = NA_real_
+    ),
+    models     = tibble::tibble(
+      info = list(list(
+        pattern         = "insufficient_data",
+        nobs            = n_valid,
+        nmiss           = n_miss,
+        breakpoint_time = NA_real_,
+        bp_se           = NA_real_
+      )),
+      linear    = list(list(
+        intercept = NA_real_,
+        slope     = NA_real_,
+        note      = "Insufficient data - no model fitted"
+      )),
+      quadratic = list(list(
+        intercept = NA_real_,
+        linear    = NA_real_,
+        quadratic = NA_real_,
+        note      = "Insufficient data - no model fitted"
+      )),
+      segmented = list(list(
+        intercept_pre = NA_real_,
+        slope_pre     = NA_real_,
+        slope_post    = NA_real_,
+        note          = "Insufficient data - no model fitted"
+      ))
     )
-  )
+  ) |> structure(class = "egfr_traj")
+)
+}
 
-  # Early exit: insufficient data
-  if (n_valid < 5L) {
-    return(out)
-  }
+  # ── Only reached if n_valid >= 5 ───────────────────────────────────────────
+  trajectory <- df_clean   # already has id, time, egfr
+    nested_info <- list(
+      pattern         = "insufficient_data",   # temporary
+      nobs            = n_valid,
+      nmiss           = n_miss,
+      breakpoint_time = NA_real_,
+      bp_se           = NA_real_
+    )
 
-  # ── Fit all three models ───────────────────────────────────────────────────
-  lin_formula <- reformulate("time", "egfr")
-  lm_lin <- lm(lin_formula, data = minimal_df)
+  
+  # ── Model fitting ──────────────────────────────────────────────────────────
+  lm_lin <- lm(egfr ~ time, data = df_clean)
 
-  quad_formula <- reformulate(c("time", "I(time^2)"), "egfr")
-  lm_quad <- try(lm(quad_formula, data = minimal_df), silent = TRUE)
+  lm_quad <- try(lm(egfr ~ time + I(time^2), data = df_clean), silent = TRUE)
 
   seg_fit <- try(
     segmented::segmented(
       lm_lin,
-      seg.Z   = ~ time,
-      psi     = median(minimal_df$time),
+      seg.Z = ~ time,
+      psi   = median(df_clean$time),
       control = segmented::seg.control(K = 1L, n.boot = 10L, it.max = 30L)
     ),
     silent = TRUE
   )
 
-  # ── Model list & ICs ───────────────────────────────────────────────────────
   models_list <- list(
     linear    = lm_lin,
     quadratic = if (!inherits(lm_quad, "try-error")) lm_quad else NULL,
@@ -147,57 +107,44 @@ classify_single_trajectory <- function(
   aic_vals <- purrr::map_dbl(models_list, ~ if (!is.null(.x)) AIC(.x) else NA_real_)
   bic_vals <- purrr::map_dbl(models_list, ~ if (!is.null(.x)) BIC(.x) else NA_real_)
 
-  # ── Select best model ──────────────────────────────────────────────────────
+  # Select best
   valid_models <- names(bic_vals)[!is.na(bic_vals)]
-  if (length(valid_models) == 0) {
-    best_model_name <- "linear"
-  } else {
-    min_bic <- min(bic_vals[valid_models], na.rm = TRUE)
-    best_model_name <- valid_models[which.min(bic_vals[valid_models])]
-
-    if ("segmented" %in% valid_models &&
-        bic_vals["segmented"] <= min_bic + bic_tie_threshold &&
-        !is.null(models_list$segmented)) {
-      best_model_name <- "segmented"
-    }
+  best_pattern <- if (length(valid_models) == 0) "linear" else {
+    min_bic <- min(bic_vals[valid_models])
+    winner <- valid_models[which.min(bic_vals[valid_models])]
+    if ("segmented" %in% valid_models && bic_vals["segmented"] <= min_bic + bic_tie_threshold) {
+      "segmented"
+    } else winner
   }
 
-  # ── Breakpoint ─────────────────────────────────────────────────────────────
   bp_time <- NA_real_
   bp_se   <- NA_real_
-  if (best_model_name == "segmented" && !is.null(models_list$segmented) &&
-      !is.null(models_list$segmented$psi) && nrow(models_list$segmented$psi) > 0) {
+  if (best_pattern == "segmented" && !is.null(models_list$segmented$psi)) {
     bp_time <- round(models_list$segmented$psi[1, "Est."], 1)
     bp_se   <- models_list$segmented$psi[1, "St.Err"]
   }
 
-  # ── Update nested info ─────────────────────────────────────────────────────
+  # Update info
   nested_info <- list(list(
-    pattern         = best_model_name,
+    pattern         = best_pattern,
     nobs            = n_valid,
     nmiss           = n_miss,
     breakpoint_time = bp_time,
     bp_se           = bp_se
   ))
 
-  # ── Predictions + intervals for all models ─────────────────────────────────
-  pred_linear <- suppressWarnings(predict(lm_lin, interval = "prediction", level = ci_level))
+  # Predictions
+  pred_lin <- suppressWarnings(predict(lm_lin, interval = "prediction", level = ci_level))
+  pred_quad <- if (!is.null(models_list$quadratic))
+    suppressWarnings(predict(models_list$quadratic, interval = "prediction", level = ci_level)) else NULL
+  pred_seg  <- if (!is.null(models_list$segmented))
+    suppressWarnings(predict(models_list$segmented, interval = "prediction", level = ci_level)) else NULL
 
-  pred_quad <- if (!is.null(models_list$quadratic)) {
-    suppressWarnings(predict(models_list$quadratic, interval = "prediction", level = ci_level))
-  } else NULL
-
-  pred_seg <- if (!is.null(models_list$segmented)) {
-    suppressWarnings(predict(models_list$segmented, interval = "prediction", level = ci_level))
-  } else NULL
-
-  # Build fitted tibble
-  fitted_df <- minimal_df |>
-    dplyr::select(id, time, egfr) |>
+  trajectory <- trajectory |>
     dplyr::mutate(
-      lin_fitted     = pred_linear[, "fit"],
-      lin_conf.low   = pred_linear[, "lwr"],
-      lin_conf.high  = pred_linear[, "upr"],
+      lin_fitted     = pred_lin[, "fit"],
+      lin_conf.low   = pred_lin[, "lwr"],
+      lin_conf.high  = pred_lin[, "upr"],
       quad_fitted    = if (!is.null(pred_quad)) pred_quad[, "fit"]     else NA_real_,
       quad_conf.low  = if (!is.null(pred_quad)) pred_quad[, "lwr"]     else NA_real_,
       quad_conf.high = if (!is.null(pred_quad)) pred_quad[, "upr"]     else NA_real_,
@@ -206,59 +153,166 @@ classify_single_trajectory <- function(
       seg_conf.high  = if (!is.null(pred_seg))  pred_seg[, "upr"]      else NA_real_
     )
 
-  out$fitted <- fitted_df
-
-  # ── Nested model_summary ───────────────────────────────────────────────────
-  extract_coefs <- function(model, model_name) {
-    if (is.null(model)) return(list())
-    s  <- summary(model)
-    cf <- coef(model)
-
-    if (model_name == "linear") {
-      list(
-        intercept     = cf[1],
-        slope         = cf[2],
-        intercept_se  = s$coefficients[1, "Std. Error"],
-        slope_se      = s$coefficients[2, "Std. Error"],
-        AIC           = aic_vals[[model_name]],
-        BIC           = bic_vals[[model_name]]
-      )
-    } else if (model_name == "quadratic") {
-      list(
-        intercept     = cf[1],
-        linear        = cf[2],
-        quadratic     = cf[3],
-        intercept_se  = s$coefficients[1, "Std. Error"],
-        linear_se     = s$coefficients[2, "Std. Error"],
-        quadratic_se  = s$coefficients[3, "Std. Error"],
-        AIC           = aic_vals[[model_name]],
-        BIC           = bic_vals[[model_name]]
-      )
-    } else if (model_name == "segmented") {
-      if (is.null(model$psi) || nrow(model$psi) == 0) return(list())
-      list(
-        intercept_pre  = cf[1],
-        slope_pre      = cf[2],
-        slope_post     = cf[3],
-        intercept_se   = s$coefficients[1, "Std. Error"],
-        slope_pre_se   = s$coefficients[2, "Std. Error"],
-        slope_post_se  = s$coefficients[3, "Std. Error"],
-        AIC            = aic_vals[[model_name]],
-        BIC            = bic_vals[[model_name]]
-      )
-    } else {
-      list()
-    }
+  # Model coefficients
+  extract_coefs <- function(m, name) {
+    if (is.null(m)) return(list())
+    s <- summary(m)
+    cf <- coef(m)
+    if (name == "linear") {
+      list(intercept = cf[1], slope = cf[2],
+           intercept_se = s$coefficients[1,2], slope_se = s$coefficients[2,2],
+           AIC = aic_vals[[name]], BIC = bic_vals[[name]])
+    } else if (name == "quadratic") {
+      list(intercept = cf[1], linear = cf[2], quadratic = cf[3],
+           intercept_se = s$coefficients[1,2], linear_se = s$coefficients[2,2],
+           quadratic_se = s$coefficients[3,2],
+           AIC = aic_vals[[name]], BIC = bic_vals[[name]])
+    } else if (name == "segmented") {
+      if (is.null(m$psi) || nrow(m$psi) == 0) return(list())
+      list(intercept_pre = cf[1], slope_pre = cf[2], slope_post = cf[3],
+           intercept_se = s$coefficients[1,2], slope_pre_se = s$coefficients[2,2],
+           slope_post_se = s$coefficients[3,2],
+           AIC = aic_vals[[name]], BIC = bic_vals[[name]])
+    } else list()
   }
 
-  model_summary <- tibble::tibble(
+  models <- tibble::tibble(
     info      = nested_info,
     linear    = list(extract_coefs(models_list$linear,    "linear")),
     quadratic = list(extract_coefs(models_list$quadratic, "quadratic")),
     segmented = list(extract_coefs(models_list$segmented, "segmented"))
   )
 
-  out$model_summary <- model_summary
+  list(
+    id         = subject_id,
+    trajectory = trajectory,
+    models     = models 
+  ) |> structure(class = "egfr_traj")
+}
 
-  out
+# =============================================================================
+# classify_multiple_trajectories
+# =============================================================================
+
+#' Classify multiple eGFR trajectories
+#'
+#' @inheritParams classify_single_trajectory
+#' @param data Data frame with multiple (or single) subjects
+#' @param best_model_only If `TRUE` (default), keep only selected model results
+#' @param estimates_only If `TRUE`, drop standard error columns
+#' @param add_cols Character vector of additional columns to return separately
+#'
+#' @return Named list of `egfr_traj` objects (one per subject)
+#' @export
+classify_multiple_trajectories <- function(
+    data,
+    id_col             = "id",
+    time_col           = "time",
+    egfr_col           = "egfr",
+    add_cols           = NULL,
+    bic_tie_threshold  = 4,
+    ci_level           = 0.95,
+    best_model_only    = TRUE,
+    estimates_only     = FALSE
+) {
+  subjects <- unique(data[[id_col]])
+  if (length(subjects) == 0) stop("No subjects found")
+
+  result <- setNames(vector("list", length(subjects)), as.character(subjects))
+
+  for (subj in subjects) {
+    subj_data <- data[data[[id_col]] == subj, , drop = FALSE]
+
+    single <- classify_single_trajectory(
+      df                = subj_data,
+      id_col            = id_col,
+      time_col          = time_col,
+      egfr_col          = egfr_col,
+      bic_tie_threshold = bic_tie_threshold,
+      ci_level          = ci_level
+    )
+    
+   # cat("Subject:", subj, "| info length:", length(single$models$info), "\n")
+   # if (length(single$models$info) > 0) {
+   #  cat("  info[[1]] exists:", !is.null(single$models$info[[1]]), "\n")
+   #}
+
+
+    # pattern <- single$models$info[[1]]$pattern
+   pattern <- if (length(single$models$info) > 0 && length(single$models$info[[1]]) > 0) {
+      single$models$info[[1]]$pattern
+   } else {
+      "insufficient_data"
+   }
+
+    # ── Trajectory: keep only selected model ───────────────────────────────
+    
+   if (pattern == "insufficient_data") {
+     # No fitted values exist – keep only core columns
+     traj <- single$trajectory |>
+    dplyr::select(id, time, egfr)
+    } else {
+    # Normal case: select and rename the selected model's columns
+    prefix <- switch(pattern,
+      "linear"    = "lin",
+      "quadratic" = "quad",
+      "segmented" = "seg",
+      "lin"  # fallback
+    )
+
+    keep_cols <- c("id", "time", "egfr",
+                   paste0(prefix, c("_fitted", "_conf.low", "_conf.high")))
+
+    traj <- single$trajectory |>
+      dplyr::select(any_of(keep_cols)) |>   # any_of() is safer
+      dplyr::rename_with(
+        ~ gsub(paste0("^", prefix, "_"), "", .x),
+        .cols = starts_with(prefix)           # now safe inside rename_with
+      ) |>
+      dplyr::rename(fitted_value = fitted)
+  } # if (pattern 
+
+    # ── Models: simplify if requested ──────────────────────────────────────
+    models_s <- single$models
+
+    if (best_model_only) {
+      # Select info + columns starting with the prefix
+      models_s <- models_s |>
+        dplyr::select(
+          info,
+          dplyr::starts_with(paste0(prefix, "_"))
+        ) |>
+        # Rename the selected columns by removing the prefix
+        dplyr::rename_with(
+          ~ gsub(paste0("^", prefix, "_"), "", .x),
+          .cols = starts_with(paste0(prefix, "_"))
+        )
+    }
+
+    if (estimates_only) {
+      models_s <- models_s |>
+        dplyr::select(-dplyr::ends_with("_se"))
+    }
+
+    out <- list(
+      id         = subj,
+      trajectory = traj,
+      models     = models_s
+    )
+
+    # ── Optional add_cols ──────────────────────────────────────────────────
+    if (!is.null(add_cols) && length(add_cols) > 0) {
+      add_df <- data |>
+        dplyr::filter(.data[[id_col]] == subj) |>
+        dplyr::select(all_of(c(id_col, add_cols))) |>
+        dplyr::distinct()
+      if (id_col != "id") add_df <- dplyr::rename(add_df, id = all_of(id_col))
+      out$add_cols <- add_df
+    }
+
+    class(out) <- "egfr_traj_collection"
+    result[[as.character(subj)]] <- out
+  }
+
+  result
 }

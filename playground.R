@@ -43,12 +43,12 @@ devtools::load_all()
 
 # ── 10. Optional: Quick test on one subject (ID "?" for example)
 df_single <- example_egfr_trajectories %>%
-  filter(id == "6") # 1, 6, 11, 16
+  filter(id == "20") # 1, 6, 11, 16
 
 head(df_single)
 tail(df_single)
 
-res <- classify_single_trajectory(
+res<- classify_single_trajectory(
     df_single,
     id_col             = "id",
     time_col           = "time",
@@ -58,15 +58,29 @@ res <- classify_single_trajectory(
 )
 
 
+
 names(res)
 res$id
-res$info
-names(res$fitted)
-model_summ <- res$model_summary
+res$models
+names(res$trajectory)
+
+model_summ <- res$models
+names(model_summ)
 model_summ
 as_tibble(model_summ$info[[1]]) # unnested $info
 as_tibble(model_summ$linear[[1]])# unnested $linear
 as_tibble(model_summ$quadratic[[1]])# unnested $quadratic
 as_tibble(model_summ$segmented[[1]])# unnested $segmented
+
+
+
+traj_all <- classify_multiple_trajectories(example_egfr_trajectories,
+    id_col             = "id",
+    time_col           = "time",
+    egfr_col           = "egfr",
+    bic_tie_threshold  = 4,
+    ci_level           = 0.95
+)
+
 
 

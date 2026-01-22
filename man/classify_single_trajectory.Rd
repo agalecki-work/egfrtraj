@@ -14,28 +14,17 @@ classify_single_trajectory(
 )
 }
 \arguments{
-\item{df}{Data frame with columns: id (or custom name), time, egfr (one subject only)}
+\item{df}{Data frame with data for exactly one subject}
 
-\item{id_col}{Name of the ID column (default: "id")}
+\item{id_col, time_col, egfr_col}{Column names}
 
-\item{time_col}{Name of time column (default: "time")}
+\item{bic_tie_threshold}{Default 4}
 
-\item{egfr_col}{Name of eGFR column (default: "egfr")}
-
-\item{bic_tie_threshold}{BIC difference threshold for preferring segmented (default: 4)}
-
-\item{ci_level}{Confidence level for prediction intervals (default: 0.95)}
+\item{ci_level}{Default 0.95}
 }
 \value{
-A named list with:
-\itemize{
-\item id: scalar character (subject identifier)
-\item fitted: tibble with id, time, egfr and model fitted values / intervals
-\item model_summary: one-row tibble with nested lists (info, linear, quadratic, segmented)
-}
+List with id, trajectory, models
 }
 \description{
-Fits linear, quadratic, and segmented (max 1 knot) models to one subject's eGFR trajectory,
-selects the best model using BIC (with tie-breaker favoring segmented),
-and returns a list with id, fitted values, and model summary.
+Classify a single eGFR trajectory
 }

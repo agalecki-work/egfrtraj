@@ -1,147 +1,67 @@
 # print-methods.R
-# Custom print and summary methods for egfr_trajectories objects
-
-#' Print method for egfr_trajectories objects
-#'
-#' Displays a concise, human-readable overview of the classification results.
-#'
-#' @param x An object of class `"egfr_trajectories"`
-#' @param ... Additional arguments (currently ignored)
-#'
-#' @return Invisibly returns `x`
+# Custom print and summary methods for egfr_traj objects
 #' @export
-#' @method print egfr_trajectories
-print.egfr_trajectories <- function(x, ...) {
-  cat("eGFR Trajectory Classification Results\n")
-  cat("────────────────────────────────────\n")
-  
-  # Basic info
-  n_total <- nrow(x$results)
-  n_classified <- sum(!x$results$pattern %in% c("insufficient_data", NA))
-  cat("Total individuals processed: ", n_total, "\n")
-  cat("Successfully classified:     ", n_classified, " (", 
-      round(n_classified / n_total * 100, 1), "%)\n\n")
-  
-  # Pattern distribution
-  cat("Pattern Distribution:\n")
-  pat_tab <- table(x$results$pattern, useNA = "ifany")
-  pat_prop <- round(prop.table(pat_tab) * 100, 1)
-  
-  print_df <- data.frame(
-    Pattern = names(pat_tab),
-    Count   = as.integer(pat_tab),
-    Percent = paste0(pat_prop, "%")
-  )
-  print(print_df, row.names = FALSE, right = FALSE)
-  cat("\n")
-  
-  # Breakpoint summary (only for rapid_with_breakpoint)
-  rapid <- x$results %>% dplyr::filter(pattern == "rapid_with_breakpoint")
-  if (nrow(rapid) > 0) {
-    cat("Breakpoint Timing Summary (rapid_with_breakpoint):\n")
-    cat("  - Number of cases: ", nrow(rapid), "\n")
-    cat("  - Mean breakpoint time: ", 
-        round(mean(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n")
-    cat("  - Median breakpoint time: ", 
-        round(median(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n")
-    cat("  - Range: ", 
-        round(min(rapid$breakpoint_time, na.rm = TRUE), 1), "–",
-        round(max(rapid$breakpoint_time, na.rm = TRUE), 1), " years\n\n")
+print.egfr_traj <- function(x, ...) {
+  cat("<egfr_traj>\n")
+  cat("  ID:          ", x$id, "\n")
+  cat("  Pattern:     ", x$models$info[[1]]$pattern, "\n")
+  cat("  Observations:", nrow(x$trajectory), "\n")
+  if (!is.null(x$add_cols)) {
+    cat("  Add. columns:", paste(setdiff(names(x$add_cols), "id"), collapse = ", "), "\n")
   }
-  
-  cat("Use `summary()` for more details or `plot()` for visualization.\n")
   invisible(x)
 }
 
 
-#' Summary method for egfr_trajectories objects
+#' Summarise a single eGFR trajectory object
 #'
-#' Provides a more detailed summary than the default print method.
-#'
-#' @param object An object of class `"egfr_trajectories"`
+#' @param object An `egfr_traj` object
 #' @param ... Additional arguments (currently ignored)
 #'
-#' @return Invisibly returns a list with summary statistics
+#' @return A one-row tibble with key summary statistics
 #' @export
-#' @method summary egfr_trajectories
-summary.egfr_trajectories <- function(object, ...) {
-  res <- object$results
-  
-  # Pattern counts
-  pat_counts <- table(res$pattern, useNA = "ifany")
-  
-  # Breakpoint statistics
-  rapid <- res %>% dplyr::filter(pattern == "rapid_with_breakpoint")
-  bp_stats <- if (nrow(rapid) > 0) {
-    list(
-      n = nrow(rapid),
-      mean_bp = mean(rapid$breakpoint_time, na.rm = TRUE),
-      median_bp = median(rapid$breakpoint_time, na.rm = TRUE),
-      min_bp = min(rapid$breakpoint_time, na.rm = TRUE),
-      max_bp = max(rapid$breakpoint_time, na.rm = TRUE),
-      n_knots_mean = mean(rapid$n_knots, na.rm = TRUE)
-    )
-  } else {
-    list(n = 0, mean_bp = NA, median_bp = NA, min_bp = NA, max_bp = NA, n_knots_mean = NA)
-  }
-  
-  # Used parameters
-  params <- object$params
-  
-  structure(
-    list(
-      n_total = nrow(res),
-      pattern_counts = pat_counts,
-      breakpoint_stats = bp_stats,
-      parameters = params,
-      call = object$call
-    ),
-    class = "summary.egfr_trajectories"
+summary.egfr_traj <- function(object, ...) {
+  info <- object$models$info[[1]]
+  traj <- object$trajectory
+
+  # Safe time range
+  time_min <- if (nrow(traj) > 0 && any(!is.na(traj$time))) min(traj$time, na.rm = TRUE) else NA_integer_
+  time_max <- if (nrow(traj) > 0 && any(!is.na(traj$time))) max(traj$time, na.rm = TRUE) else NA_integer_
+  time_str <- if (!is.na(time_min) && !is.na(time_max)) {
+    sprintf("%d – %d", time_min, time_max)
+  } else "NA – NA"
+
+  # Safe eGFR values
+  egfr_start  <- if (nrow(traj) > 0 && !is.na(traj$egfr[1])) round(traj$egfr[1], 1) else NA_real_
+  egfr_end    <- if (nrow(traj) > 0 && !is.na(traj$egfr[nrow(traj)])) round(traj$egfr[nrow(traj)], 1) else NA_real_
+  egfr_change <- if (nrow(traj) > 1 && !any(is.na(traj$egfr[c(1, nrow(traj))]))) {
+                    round(egfr_start - egfr_end, 1)
+                  } else NA_real_
+
+  tibble::tibble(
+    id              = object$id,
+    pattern         = info$pattern,
+    n_valid         = info$nobs,
+    n_missing       = info$nmiss,
+    time_range      = time_str,
+    egfr_start      = egfr_start,
+    egfr_end        = egfr_end,
+    egfr_change     = egfr_change,
+    breakpoint_time = if (!is.na(info$breakpoint_time)) round(info$breakpoint_time, 1) else NA_real_,
+    breakpoint_se   = if (!is.na(info$bp_se)) round(info$bp_se, 2) else NA_real_
   )
 }
 
 
-#' Print method for summary.egfr_trajectories
+#' Summarise results from classify_multiple_trajectories
 #'
-#' @param x A summary object from `summary.egfr_trajectories()`
-#' @param digits Number of decimal places (default: 2)
-#' @param ... Additional arguments (ignored)
+#' @param object Named list of `egfr_traj` objects
+#' @param ... Additional arguments (currently ignored)
 #'
+#' @return A tibble with one row per subject
 #' @export
-#' @method print summary.egfr_trajectories
-print.summary.egfr_trajectories <- function(x, digits = 2, ...) {
-  cat("Summary of eGFR Trajectory Classification\n")
-  cat("────────────────────────────────────────\n\n")
-  
-  cat("Call:\n")
-  print(x$call)
-  cat("\n")
-  
-  cat("Parameters used:\n")
-  cat("  Min observations per ID: ", x$parameters$min_obs, "\n")
-  cat("  Slope significance level: ", x$parameters$slope_p, "\n")
-  cat("  Quadratic p-value threshold: ", x$parameters$quad_p, "\n")
-  cat("  Min ΔR² for non-linearity: ", x$parameters$delta_r2, "\n")
-  cat("  Max knots allowed: ", x$parameters$max_knots, "\n\n")
-  
-  cat("Classification Results:\n")
-  cat("  Total trajectories: ", x$n_total, "\n\n")
-  
-  cat("Pattern Counts:\n")
-  print(as.data.frame(x$pattern_counts), right = FALSE)
-  cat("\n")
-  
-  cat("Breakpoint Statistics (rapid_with_breakpoint):\n")
-  if (x$breakpoint_stats$n > 0) {
-    cat("  Number of rapid cases: ", x$breakpoint_stats$n, "\n")
-    cat("  Mean breakpoint time:  ", round(x$breakpoint_stats$mean_bp, digits), " years\n")
-    cat("  Median breakpoint time:", round(x$breakpoint_stats$median_bp, digits), " years\n")
-    cat("  Range:                 ", round(x$breakpoint_stats$min_bp, digits), "–",
-        round(x$breakpoint_stats$max_bp, digits), " years\n")
-    cat("  Average knots per case:", round(x$breakpoint_stats$n_knots_mean, digits), "\n")
-  } else {
-    cat("  No rapid_with_breakpoint trajectories detected.\n")
-  }
-  
-  invisible(x)
+summary.egfr_traj_list <- function(object, ...) {
+  purrr::map_dfr(object, summary.egfr_traj)
 }
+
+
