@@ -7,7 +7,8 @@
 
 <!-- badges: end -->
 
-The goal of egfrtraj is to …
+The goal of egfrtraj is to classify egfr trajectories into 3 patterns:
+linear, quadratic, segmented (with one time breakpoint)
 
 ## Installation
 
