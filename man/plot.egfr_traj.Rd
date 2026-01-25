@@ -4,22 +4,19 @@
 \alias{plot.egfr_traj}
 \title{Plot an eGFR trajectory}
 \usage{
-\method{plot}{egfr_traj}(x, plot_model = c("lin", "quad", "seg"), show_ci = TRUE, ...)
+\method{plot}{egfr_traj}(x, fitted = "best", show_ci = TRUE, ...)
 }
 \arguments{
-\item{x}{An \code{egfr_traj} object (from \code{classify_single_trajectory()})}
+\item{x}{An \code{egfr_traj} object}
 
-\item{plot_model}{Character vector specifying \strong{additional} fitted models to show.
-Options: \code{"lin"}, \code{"quad"}, \code{"seg"}. Default: \code{c("lin", "quad", "seg")} (all).
-The \strong{selected model} is \strong{always plotted}, even if not in \code{plot_model}.
-Use \code{character(0)} or \code{NULL} to show \strong{only the selected model}.}
+\item{fitted}{Character string: \code{"best"} (default), \code{"lin"}, \code{"quad"}, \code{"seg"}, or \code{NULL} (observed only).}
 
-\item{show_ci}{Logical. Show confidence bands for the selected model? Default \code{TRUE}.}
+\item{show_ci}{Logical. Show CI ribbon for the fitted model? Default \code{TRUE}.}
 
 \item{...}{Passed to ggplot2}
 }
 \value{
-A ggplot object
+ggplot object
 }
 \description{
 Plot an eGFR trajectory

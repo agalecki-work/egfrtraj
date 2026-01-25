@@ -5,15 +5,17 @@
 \title{Generate synthetic eGFR dataset for testing}
 \usage{
 generate_synthetic_egfr(
-  n_per_pattern = 1,
+  pct_miss = c(0, 10, 50, 90),
   years = 0:26,
   baseline_egfr = 125,
-  noise_sd = 0.1,
+  noise_sd = 2,
   seed = NULL
 )
 }
 \arguments{
-\item{n_per_pattern}{Number of trajectories per pattern type (default: 1)}
+\item{pct_miss}{Numeric vector specifying the percentage of randomly assigned
+missing values for each subject (e.g. \code{c(0, 10, 50, 90)}). The length of
+this vector determines how many trajectories/subjects are generated \strong{per pattern}.}
 
 \item{years}{Time points (default: 0:26)}
 
@@ -24,13 +26,16 @@ generate_synthetic_egfr(
 \item{seed}{Random seed for reproducibility (default: NULL = no fixed seed)}
 }
 \value{
-A tibble with columns: id, time, egfr, true_pattern
+A tibble with columns: id (character), time, egfr, true_pattern (character)
 }
 \description{
-Creates a balanced dataset with one trajectory per pattern (total 108 rows).
+Creates a balanced dataset with multiple eGFR trajectories per pattern (linear, quadratic, or segmented),
+including controlled proportions of missing values.
 }
 \examples{
 set.seed(20250116)
-sim_data <- generate_synthetic_egfr()
-table(sim_data$true_pattern)
+sim_data <- generate_synthetic_egfr(pct_miss = c(0, 10, 50, 90))
+str(sim_data)           # id and true_pattern are character
+table(sim_data$id)      # Number of rows per Id
+sim_data |> filter(id == 35)
 }

@@ -11,11 +11,19 @@ generate_one_trajectory(
   baseline_egfr = 125,
   noise_sd = 2
 )
+
+generate_one_trajectory(
+  id,
+  pattern,
+  years = 0:26,
+  baseline_egfr = 125,
+  noise_sd = 2
+)
 }
 \arguments{
 \item{id}{Identifier for the trajectory (character or numeric)}
 
-\item{pattern}{One of: "linear", "quadratic", "with_breakpoint", "insufficient_data"}
+\item{pattern}{One of: "linear", "quadratic", "with_breakpoint"}
 
 \item{years}{Numeric vector of time points (default: 0:26)}
 
@@ -25,8 +33,13 @@ generate_one_trajectory(
 }
 \value{
 A tibble with columns: id, time, egfr, true_pattern
+
+A tibble with columns: id, time, egfr, true_pattern
 }
 \description{
+Internal helper function to create one realistic-looking eGFR time series
+with specified pattern.
+
 Internal helper function to create one realistic-looking eGFR time series
 with specified pattern.
 }

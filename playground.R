@@ -44,69 +44,53 @@ devtools::document()
 devtools::load_all()
 
 # ── 10. Optional: Quick test on one subject (ID "?" for example)
-df_single <- example_egfr_trajectories %>%
-  filter(id == "11") # 1, 6, 11, 16
 
-head(df_single)
-tail(df_single)
+traj1 <- extract_and_classify(example_egfr_trajectories, "1") # linear trajectory
+traj6 <- extract_and_classify(example_egfr_trajectories, "6") # quadratic
+traj11 <- extract_and_classify(example_egfr_trajectories, "11")
+traj16 <- extract_and_classify(example_egfr_trajectories, "16")
 
-res <- classify_single_trajectory(
-    df_single,
-    id_col             = "id",
-    time_col           = "time",
-    egfr_col           = "egfr",
-    bic_tie_threshold  = 4,
-    ci_level           = 0.95
-)
-summary(res)
-
-head(df_single)
-tail(df_single)
-
-res <- classify_single_trajectory(
-    df_single,
-    id_col             = "id",
-    time_col           = "time",
-    egfr_col           = "egfr",
-    bic_tie_threshold  = 4,
-    ci_level           = 0.95
-)
-summary(res)
-plot(res)
-plot(res, plot_model= "")
-
-
-names(res)
-res$id
-res$models
-names(res$trajectory)
-
-model_summ <- res$models
-names(model_summ)
-model_summ
-as_tibble(model_summ$info[[1]]) # unnested $info
-as_tibble(model_summ$linear[[1]])# unnested $linear
-as_tibble(model_summ$quadratic[[1]])# unnested $quadratic
-as_tibble(model_summ$segmented[[1]])# unnested $segmented
-
-traj_all <- classify_multiple_trajectories(
-  example_egfr_trajectories,
-  id_col             = "id",
-  time_col           = "time",
-  egfr_col           = "egfr",
-  bic_tie_threshold  = 4,
-  ci_level           = 0.95
-)
+traj <- traj1
 
 
 
-traj_all <- classify_multiple_trajectories(example_egfr_trajectories,
-    id_col             = "id",
-    time_col           = "time",
-    egfr_col           = "egfr",
-    bic_tie_threshold  = 4,
-    ci_level           = 0.95
-)
+plot(traj) # Observed values in black
+
+plot(traj, fitted = c("best")) 
+plot(traj, fitted = c("best"), show_ci = FALSE) 
+
+plot(traj, fitted = c("linear"))
+plot(traj, fitted = c("linear"), show_ci = FALSE)
+
+plot(traj, fitted = c("quad"))
+plot(traj, fitted = c("seg"))
 
 
+
+plot(traj, fitted = c("best", "quad")) # fitted line (use different color, CI included. In the title include "Best model: linear. slope = xx(xx, xx)"
+plot(traj, fitted = c("best", "quad", "seg")) # fitted line in black (use different color, CI included. In the title include "Best model: linear. slope = xx(xx, xx)"
+
+plot(traj, fitted = c("quad")) # fitted quadratic function (different color, dashed line, good idea) , CI included
+plot(traj, fitted = c("seg")) # fitted segmented (dashed line red), CI included add vertical dotted (descrete) vertical line for breakpoint and CI on x-axis)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Extract multiple subjects from a dataset
+
+trajx <- extract_and_classify(example_egfr_trajectories, c("1","6","11","16"))
+
+
+# inspect_egfr_traj(traj)
 
