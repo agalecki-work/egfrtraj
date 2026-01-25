@@ -7,15 +7,16 @@
 
 <!-- badges: end -->
 
-The goal of egfrtraj is to classify egfr trajectories into 3 patterns:
-linear, quadratic, segmented (with one time breakpoint)
+The goal of egfrtraj is to …
 
 ## Installation
 
-You can install the development version of egfrtraj like so:
+You can install the development version of egfrtraj from
+[GitHub](https://github.com/) with:
 
 ``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+# install.packages("pak")
+pak::pak("agalecki-work/egfrtraj")
 ```
 
 ## Example
@@ -23,7 +24,7 @@ You can install the development version of egfrtraj like so:
 This is a basic example which shows you how to solve a common problem:
 
 ``` r
-# library(egfrtraj)
+library(egfrtraj)
 ## basic example code
 ```
 

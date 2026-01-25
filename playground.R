@@ -9,6 +9,8 @@ library(devtools)
 
 # ── 4. Re-document the package (updates docs, NAMESPACE, Rd files)
 devtools::document()
+### usethis::use_readme_rmd() #???
+devtools::build_readme()
 
 # ── 5. Reload the package (makes all functions and current saved data available)
 devtools::load_all()
@@ -20,23 +22,6 @@ library(dplyr)
 library(segmented)
 
 
-# ── 7. RECREATE the example data from scratch (just in case)
-set.seed(20250116)  # for reproducibility
-
-example_egfr_trajectories <- generate_synthetic_egfr(
-  n_per_pattern = 5,       # 5 subjects per pattern
-  years         = 0:26,    # 27 rows per person
-  baseline_egfr = 125,
-  noise_sd      = 2
-)
-
-# Quick verification (should show  4 patterns * 5 subjects per pattern -> 20 subjects, 27 per subject)
-nrow(example_egfr_trajectories) #  27*20 = 540 rows in total
-table(example_egfr_trajectories$true_pattern) # 5 *27 = 135 rows per pattern 
-
-# Save the freshly generated data back to data/ folder (overwrites old version)
-usethis::use_data(example_egfr_trajectories, overwrite = TRUE)
-
 # ── 8. Re-document after data recreation
 devtools::document()
 
@@ -45,6 +30,18 @@ devtools::load_all()
 
 # ── 10. Optional: Quick test on one subject (ID "?" for example)
 
+single_df1    <- example_egfr_data %>% filter(id == "1")     # True pattern: linear
+single_df6    <- example_egfr_data %>% filter(id == "6")     # true pattern: quadratic
+single_df11   <- example_egfr_data %>% filter(id == "11")    # true pattern: segmented
+single_df16   <- example_egfr_data %>% filter(id == "16")    # true pattern: insufficient data
+
+
+single_df <- single_df1  # Data with one subject
+traj = classify_single_trajectory(single_df)
+
+
+
+
 traj1 <- extract_and_classify(example_egfr_trajectories, "1") # linear trajectory
 traj6 <- extract_and_classify(example_egfr_trajectories, "6") # quadratic
 traj11 <- extract_and_classify(example_egfr_trajectories, "11")
@@ -52,11 +49,33 @@ traj16 <- extract_and_classify(example_egfr_trajectories, "16")
 
 traj <- traj1
 
+# requirements
+$ xlabel should be "Timr (in years)"
+# ylabel should be "eGFR (<provide units>)
+# if fitted argument is not NULL: Best model name should be included in the subtitle, for example: Best model: linear. Slope = xx (SE = xx)
+# Observed data points always black
+
+# linear fit always black. 
+# If linear model is the best use solid thick black line, 
+# if not the best use dashed thin line. In the subtitle indicate that fitted line (graphic representation) is from <different model> specified in fitted 
+@ argumwnt. This will serve as a legend.
+
+# Similar approach for quad fit
+# If quad model is the best use solid thick purple line, 
+# if not the best use dashed thin line. In the subtitle indicate that fitted line (graphic representation) is from different model specified in fitted 
+@ argumwnt. This will serve as a legend.
+
+# Similar approach for seg fit
+# If seg model is the best use solid thick red line, 
+# if not the best use dashed thin line. In the subtitle indicate that fitted line (graphic representation) is from different model specified in fitted 
+@ argumwnt. This will serve as a legend.
 
 
-plot(traj) # Observed values in black
 
-plot(traj, fitted = c("best")) 
+
+"plot(traj) # / Observed values in black, fitted line solid black(because linear is the best)
+
+plot(traj, fitted = c("best")) $ same
 plot(traj, fitted = c("best"), show_ci = FALSE) 
 
 plot(traj, fitted = c("linear"))
