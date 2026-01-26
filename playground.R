@@ -9,8 +9,8 @@ library(devtools)
 
 # ── 4. Re-document the package (updates docs, NAMESPACE, Rd files)
 devtools::document()
-### usethis::use_readme_rmd() #???
-devtools::build_readme()
+### DO NOT usethis::use_readme_rmd() #???
+# devtools::build_readme()
 
 # ── 5. Reload the package (makes all functions and current saved data available)
 devtools::load_all()
