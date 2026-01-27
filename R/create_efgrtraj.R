@@ -149,12 +149,18 @@ create_egfrtraj <- function(
       .cols = dplyr::all_of(c(id_col, time_col, egfr_col))
     )
 
-  # ── 5. Determine final_subjects flag & class suffix ───────────────────────────
+    # ── 5. Determine final_subjects flag & class suffix ───────────────────────────
   n_final <- dplyr::n_distinct(out$id)
   final_flag <- if (n_final == 0L) "empty" else if (n_final == 1L) "one" else "All"
 
-  # Class prefix based on number of subjects
-  class_suffix <- if (final_flag == "one") "egfrtraj_1" else "egfrtraj_m"
+  # Class prefix
+  if (final_flag == "empty") {
+    class_suffix <- "egfrtraj_empty"
+  } else if (final_flag == "one") {
+    class_suffix <- "egfrtraj_1"
+  } else {
+    class_suffix <- "egfrtraj_m"
+  }
 
   # ── 6. Collect original data info ────────────────────────────────────────────
   origdata_info <- list(

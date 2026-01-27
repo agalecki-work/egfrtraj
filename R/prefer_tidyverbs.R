@@ -2,7 +2,6 @@
 #'
 #' Gives priority to dplyr and tidyr verbs, including select/rename/distinct.
 #'
-#' @export
 #' @examples
 #' \dontrun{
 #' library(conflicted)
@@ -10,12 +9,13 @@
 #' library(tidyr)
 #' library(segmented)
 #' library(egfrtraj)
-#' data(example_egfr_data)
+#' data(example_data)
 #' egfrtraj::prefer_tidyverbs()
 #'
 #' # Now filter(), lag(), select() etc. will use dplyr versions
-#' example_egfr_data |> filter(time > 0)
+#' example_data |> filter(time > 0)
 #' }
+#' @export
 prefer_tidyverbs <- function() {
   if (!requireNamespace("conflicted", quietly = TRUE)) {
     stop("Package 'conflicted' is required.", call. = FALSE)

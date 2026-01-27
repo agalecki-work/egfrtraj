@@ -55,9 +55,11 @@
 #' 
 #' # ── 3. Request IDs that don't exist (silently skipped) ───────────────────────
 #' bad_ids <- c("nonexistent1", "nonexistent2", selected_ids[3])
+#' print(bad_ids)
 #' sub_bad <- subset_egfrtibble(res, ids = bad_ids)
 #' 
 #' n_distinct(sub_bad$id)                 # only 1 subject kept
+#' unique(sub_bad$id)
 #' attr(sub_bad, "origdata_info")$final_subjects   # "one"
 #' 
 #' 
